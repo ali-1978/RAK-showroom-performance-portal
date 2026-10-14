@@ -1,0 +1,779 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RAK Showroom Performance Portal</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f3f6fb;
+      color: #172033;
+    }
+    header {
+      background: #172b4d;
+      color: white;
+      padding: 18px 5%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    main {
+      max-width: 1200px;
+      margin: 25px auto;
+      padding: 0 16px;
+    }
+    .card {
+      background: white;
+      border: 1px solid #e0e6ef;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 18px;
+    }
+    .login { max-width: 430px; margin: 70px auto; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit,minmax(190px,1fr));
+      gap: 14px;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .metric {
+      font-size: 30px;
+      font-weight: bold;
+      color: #1769d2;
+      margin-top: 12px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: bold;
+      margin: 12px 0 6px;
+    }
+    input, select {
+      width: 100%;
+      padding: 11px;
+      border: 1px solid #cfd8e6;
+      border-radius: 7px;
+      font: inherit;
+      background: white;
+    }
+    button {
+      padding: 11px 15px;
+      border: 0;
+      border-radius: 7px;
+      background: #1769d2;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      margin: 5px 4px 0 0;
+    }
+    .secondary { background: #e7edf5; color: #24344e; }
+    .danger { background: #b42318; }
+    .hidden { display: none !important; }
+    .muted { color: #8490a3; font-size: 12px; }
+    .status { padding: 10px; margin-top: 12px; border-radius: 7px; }
+    .error { background: #fff0f0; color: #a21d1d; }
+    .success { background: #e9f8ee; color: #17603b; }
+    .table-wrap { overflow-x: auto; margin-top: 16px; }
+    table {
+      width: 100%;
+      min-width: 850px;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 11px;
+      text-align: left;
+      border-bottom: 1px solid #e7ebf2;
+    }
+    th { background: #f5f7fb; }
+    @media(max-width:600px) {
+      main { padding: 0 10px; }
+      .card { padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <strong>RAK Showroom Performance Portal</strong>
+    <div class="muted" style="color:#d6e0f0">Management System</div>
+  </div>
+  <div id="userBar" class="hidden">
+    <span id="userLabel"></span>
+    <button id="logoutButton" class="secondary">Sign Out</button>
+  </div>
+</header>
+
+<main>
+  <section id="loginPanel" class="card login">
+    <h1>Welcome Back</h1>
+    <p>Sign in using your assigned account.</p>
+    <form id="loginForm">
+      <label for="email">Email Address</label>
+      <input id="email" type="email" autocomplete="username" required>
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+      <button id="loginButton" type="submit">Sign In</button>
+    </form>
+    <div id="loginMessage" role="status"></div>
+  </section>
+
+  <section id="appPanel" class="hidden">
+    <div class="row">
+      <div>
+        <h1 id="dashboardTitle">Dashboard</h1>
+        <p id="dashboardSubtitle">Performance overview</p>
+      </div>
+      <button id="refreshButton">Refresh Data</button>
+    </div>
+
+    <div class="grid">
+      <div class="card">Total Visitors
+        <div id="totalVisitors" class="metric">0</div>
+      </div>
+      <div class="card">Total Orders
+        <div id="totalOrders" class="metric">0</div>
+      </div>
+      <div class="card">Conversion Rate
+        <div id="conversionRate" class="metric">0%</div>
+      </div>
+      <div class="card">Total Reports
+        <div id="reportCount" class="metric">0</div>
+      </div>
+    </div>
+
+    <section id="adminPanel" class="card hidden">
+      <h2>Add New Showroom</h2>
+      <form id="showroomForm" class="grid">
+        <div>
+          <label for="showroomName">Showroom Name</label>
+          <input id="showroomName" maxlength="100" required>
+        </div>
+        <div>
+          <label for="showroomLocation">Location</label>
+          <input id="showroomLocation" maxlength="150">
+        </div>
+        <div>
+          <button id="addShowroomButton" type="submit">Add Showroom</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Add Executive</h2>
+      <form id="executiveForm" class="grid">
+        <div id="executiveShowroomWrap">
+          <label for="executiveShowroom">Showroom</label>
+          <select id="executiveShowroom" required></select>
+        </div>
+        <div>
+          <label for="executiveName">Executive Name</label>
+          <input id="executiveName" maxlength="100" required>
+        </div>
+        <div>
+          <button id="addExecutiveButton" type="submit">Add Executive</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Daily Performance Entry</h2>
+      <form id="reportForm" class="grid">
+        <div id="reportShowroomWrap">
+          <label for="reportShowroom">Showroom</label>
+          <select id="reportShowroom" required></select>
+        </div>
+        <div>
+          <label for="reportExecutive">Executive</label>
+          <select id="reportExecutive" required></select>
+        </div>
+        <div>
+          <label for="reportDate">Report Date</label>
+          <input id="reportDate" type="date" required>
+        </div>
+        <div>
+          <label for="visitors">Visitors Served</label>
+          <input id="visitors" type="number" min="0" step="1" required>
+        </div>
+        <div>
+          <label for="orders">Orders Converted</label>
+          <input id="orders" type="number" min="0" step="1" required>
+        </div>
+        <div>
+          <label for="notes">Notes (Optional)</label>
+          <input id="notes" maxlength="500">
+        </div>
+        <div>
+          <button id="saveReportButton" type="submit">Save Report</button>
+          <button id="cancelEditButton" type="button" class="secondary hidden">Cancel Edit</button>
+        </div>
+      </form>
+      <div id="appMessage" role="status"></div>
+    </section>
+
+    <section class="card">
+      <div class="row">
+        <h2>Performance Reports</h2>
+        <button id="exportButton">Download Excel</button>
+      </div>
+
+      <div class="grid">
+        <div>
+          <label for="filterFrom">From Date</label>
+          <input id="filterFrom" type="date">
+        </div>
+        <div>
+          <label for="filterTo">To Date</label>
+          <input id="filterTo" type="date">
+        </div>
+        <div id="filterShowroomWrap">
+          <label for="filterShowroom">Showroom</label>
+          <select id="filterShowroom"></select>
+        </div>
+        <div>
+          <label for="filterExecutive">Executive</label>
+          <select id="filterExecutive"></select>
+        </div>
+      </div>
+
+      <button id="applyFiltersButton">Apply Filters</button>
+      <button id="clearFiltersButton" class="secondary">Clear Filters</button>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Showroom</th>
+              <th>Executive</th>
+              <th>Visitors</th>
+              <th>Orders</th>
+              <th>Conversion</th>
+              <th>Notes</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="reportRows">
+            <tr><td colspan="8">Please sign in.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const SUPABASE_URL = "https://emojsjedapnjjcgetpzl.supabase.co";
+  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_8h9GAUAp6bSZMbh2OdIVrw_zh5e_w0X";
+
+  let db = null;
+  let currentUser = null;
+  let profile = null;
+  let showrooms = [];
+  let executives = [];
+  let reports = [];
+  let editingId = null;
+  let loading = false;
+
+  const $ = id => document.getElementById(id);
+  const isAdmin = () => profile?.role === "admin";
+
+  function message(id, text, error = false) {
+    $(id).textContent = text;
+    $(id).className = "status " + (error ? "error" : "success");
+  }
+
+  async function unwrap(query) {
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  }
+
+  function busy(id, state, text) {
+    const b = $(id);
+    if (state) {
+      b.dataset.originalText = b.textContent;
+      b.textContent = text;
+      b.disabled = true;
+    } else {
+      b.textContent = b.dataset.originalText || b.textContent;
+      b.disabled = false;
+    }
+  }
+
+  function localDate() {
+    const n = new Date();
+    return new Date(n.getTime() - n.getTimezoneOffset() * 60000)
+      .toISOString().slice(0, 10);
+  }
+
+  async function login(event) {
+    event.preventDefault();
+    if (!db) {
+      message("loginMessage", "Configure Supabase first.", true);
+      return;
+    }
+
+    busy("loginButton", true, "Signing In...");
+    try {
+      const { error } = await db.auth.signInWithPassword({
+        email: $("email").value.trim(),
+        password: $("password").value
+      });
+      if (error) throw error;
+      await startApp();
+    } catch (e) {
+      message("loginMessage", e.message, true);
+    } finally {
+      busy("loginButton", false);
+    }
+  }
+
+  async function startApp() {
+    try {
+      const { data, error } = await db.auth.getSession();
+      if (error) throw error;
+      if (!data.session) return showLoggedOut();
+
+      currentUser = data.session.user;
+      profile = await unwrap(
+        db.from("profiles")
+          .select("id,full_name,role,showroom_id")
+          .eq("id", currentUser.id)
+          .single()
+      );
+
+      if (!["admin", "showroom_user"].includes(profile.role)) {
+        throw new Error("Your account is not authorized.");
+      }
+      if (profile.role === "showroom_user" && !profile.showroom_id) {
+        throw new Error("No showroom is assigned to your account.");
+      }
+
+      $("loginPanel").classList.add("hidden");
+      $("appPanel").classList.remove("hidden");
+      $("userBar").classList.remove("hidden");
+      $("userLabel").textContent = profile.full_name + " | " + profile.role;
+      $("dashboardTitle").textContent = isAdmin() ? "Admin Dashboard" : "Showroom Dashboard";
+      $("dashboardSubtitle").textContent = isAdmin()
+        ? "All showroom performance and reports"
+        : "Your showroom performance and reports";
+
+      $("adminPanel").classList.toggle("hidden", !isAdmin());
+      $("executiveShowroomWrap").classList.toggle("hidden", !isAdmin());
+      $("reportShowroomWrap").classList.toggle("hidden", !isAdmin());
+      $("filterShowroomWrap").classList.toggle("hidden", !isAdmin());
+      $("reportDate").value = localDate();
+
+      await loadDashboard();
+    } catch (e) {
+      await db.auth.signOut();
+      showLoggedOut();
+      message("loginMessage", e.message, true);
+    }
+  }
+
+  function showLoggedOut() {
+    currentUser = null;
+    profile = null;
+    showrooms = [];
+    executives = [];
+    reports = [];
+    editingId = null;
+    $("appPanel").classList.add("hidden");
+    $("userBar").classList.add("hidden");
+    $("loginPanel").classList.remove("hidden");
+    $("password").value = "";
+  }
+
+  async function logout() {
+    const { error } = await db.auth.signOut();
+    if (error) return message("appMessage", error.message, true);
+    showLoggedOut();
+  }
+
+  async function loadDashboard() {
+    if (!profile || loading) return;
+    loading = true;
+    $("refreshButton").disabled = true;
+
+    try {
+      showrooms = await unwrap(
+        db.from("showrooms")
+          .select("id,name,location,is_active")
+          .order("name")
+      );
+
+      executives = await unwrap(
+        db.from("executives")
+          .select("id,showroom_id,name,is_active")
+          .order("name")
+      );
+
+      reports = await unwrap(
+        db.from("daily_reports")
+          .select("id,showroom_id,executive_id,report_date,visitors,orders,notes,created_by,showrooms(name),executives(name)")
+          .order("report_date", { ascending: false })
+          .limit(10000)
+      );
+
+      populateSelects();
+      renderReports();
+    } catch (e) {
+      message("appMessage", e.message, true);
+    } finally {
+      loading = false;
+      $("refreshButton").disabled = false;
+    }
+  }
+
+  function fillSelect(id, items, label, all = false) {
+    const select = $(id);
+    const previous = select.value;
+    select.replaceChildren();
+
+    if (all) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "All";
+      select.appendChild(option);
+    }
+
+    items.forEach(item => {
+      const option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = label(item);
+      select.appendChild(option);
+    });
+
+    if ([...select.options].some(o => o.value === previous)) {
+      select.value = previous;
+    }
+  }
+
+  function populateSelects() {
+    const active = showrooms.filter(s => s.is_active);
+    const accessible = isAdmin()
+      ? active
+      : active.filter(s => s.id === profile.showroom_id);
+
+    fillSelect("executiveShowroom", accessible, s => s.name);
+    fillSelect("reportShowroom", accessible, s => s.name);
+    fillSelect("filterShowroom", accessible, s => s.name, true);
+    fillSelect("filterExecutive",
+      executives.filter(e => e.is_active), e => e.name, true);
+
+    refreshExecutives();
+  }
+
+  function selectedShowroom() {
+    return isAdmin() ? $("reportShowroom").value : profile?.showroom_id;
+  }
+
+  function refreshExecutives() {
+    const sid = selectedShowroom();
+    fillSelect("reportExecutive",
+      executives.filter(e => e.is_active && (!sid || e.showroom_id === sid)),
+      e => e.name);
+  }
+
+  async function addShowroom(event) {
+    event.preventDefault();
+    if (!isAdmin()) return;
+
+    busy("addShowroomButton", true, "Adding...");
+    try {
+      await unwrap(db.from("showrooms").insert({
+        name: $("showroomName").value.trim(),
+        location: $("showroomLocation").value.trim() || null
+      }));
+
+      $("showroomForm").reset();
+      message("appMessage", "Showroom added successfully.");
+      await loadDashboard();
+    } catch (e) {
+      message("appMessage", e.message, true);
+    } finally {
+      busy("addShowroomButton", false);
+    }
+  }
+
+  async function addExecutive(event) {
+    event.preventDefault();
+    const sid = isAdmin()
+      ? $("executiveShowroom").value
+      : profile?.showroom_id;
+
+    if (!sid) return message("appMessage", "Select a showroom.", true);
+
+    busy("addExecutiveButton", true, "Adding...");
+    try {
+      await unwrap(db.from("executives").insert({
+        showroom_id: sid,
+        name: $("executiveName").value.trim()
+      }));
+
+      $("executiveForm").reset();
+      message("appMessage", "Executive added successfully.");
+      await loadDashboard();
+    } catch (e) {
+      message("appMessage", e.message, true);
+    } finally {
+      busy("addExecutiveButton", false);
+    }
+  }
+
+  async function saveReport(event) {
+    event.preventDefault();
+
+    const sid = selectedShowroom();
+    const eid = $("reportExecutive").value;
+    const visitors = Number($("visitors").value);
+    const orders = Number($("orders").value);
+    const date = $("reportDate").value;
+
+    if (!sid || !eid || !date) {
+      return message("appMessage", "Select a showroom, executive and date.", true);
+    }
+    if (!Number.isSafeInteger(visitors) || visitors < 0 ||
+        !Number.isSafeInteger(orders) || orders < 0 || orders > visitors) {
+      return message("appMessage", "Enter valid numbers. Orders cannot exceed visitors.", true);
+    }
+
+    const payload = {
+      showroom_id: sid,
+      executive_id: eid,
+      report_date: date,
+      visitors,
+      orders,
+      notes: $("notes").value.trim() || null
+    };
+
+    busy("saveReportButton", true, editingId ? "Updating..." : "Saving...");
+    try {
+      if (editingId) {
+        await unwrap(db.from("daily_reports")
+          .update(payload).eq("id", editingId));
+      } else {
+        payload.created_by = currentUser.id;
+        await unwrap(db.from("daily_reports").insert(payload));
+      }
+
+      cancelEdit();
+      message("appMessage", "Report saved successfully.");
+      await loadDashboard();
+    } catch (e) {
+      message("appMessage",
+        e.code === "23505"
+          ? "A report already exists for this executive and date."
+          : e.message,
+        true);
+    } finally {
+      busy("saveReportButton", false);
+    }
+  }
+
+  function getFilteredReports() {
+    const from = $("filterFrom").value;
+    const to = $("filterTo").value;
+    const sid = $("filterShowroom").value;
+    const eid = $("filterExecutive").value;
+
+    return reports.filter(r =>
+      (!from || r.report_date >= from) &&
+      (!to || r.report_date <= to) &&
+      (!sid || r.showroom_id === sid) &&
+      (!eid || r.executive_id === eid)
+    );
+  }
+
+  function renderReports() {
+    const rows = getFilteredReports();
+    const visitors = rows.reduce((n, r) => n + r.visitors, 0);
+    const orders = rows.reduce((n, r) => n + r.orders, 0);
+
+    $("totalVisitors").textContent = visitors.toLocaleString();
+    $("totalOrders").textContent = orders.toLocaleString();
+    $("conversionRate").textContent =
+      (visitors ? orders / visitors * 100 : 0).toFixed(1) + "%";
+    $("reportCount").textContent = rows.length.toLocaleString();
+
+    const tbody = $("reportRows");
+    tbody.replaceChildren();
+
+    if (!rows.length) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 8;
+      td.textContent = "No reports found.";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    rows.forEach(r => {
+      const tr = document.createElement("tr");
+      [
+        r.report_date,
+        r.showrooms?.name || "",
+        r.executives?.name || "",
+        r.visitors,
+        r.orders,
+        (r.visitors ? r.orders / r.visitors * 100 : 0).toFixed(1) + "%",
+        r.notes || ""
+      ].forEach(value => {
+        const td = document.createElement("td");
+        td.textContent = String(value);
+        tr.appendChild(td);
+      });
+
+      const actions = document.createElement("td");
+      const edit = document.createElement("button");
+      edit.className = "secondary";
+      edit.textContent = "Edit";
+      edit.addEventListener("click", () => editReport(r.id));
+      actions.appendChild(edit);
+
+      if (isAdmin()) {
+        const del = document.createElement("button");
+        del.className = "danger";
+        del.textContent = "Delete";
+        del.addEventListener("click", () => deleteReport(r.id));
+        actions.appendChild(del);
+      }
+
+      tr.appendChild(actions);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function editReport(id) {
+    const r = reports.find(x => x.id === id);
+    if (!r) return;
+
+    editingId = id;
+    if (isAdmin()) $("reportShowroom").value = r.showroom_id;
+
+    refreshExecutives();
+    $("reportExecutive").value = r.executive_id;
+    $("reportDate").value = r.report_date;
+    $("visitors").value = r.visitors;
+    $("orders").value = r.orders;
+    $("notes").value = r.notes || "";
+
+    $("saveReportButton").textContent = "Update Report";
+    $("cancelEditButton").classList.remove("hidden");
+    $("reportForm").scrollIntoView({ behavior: "smooth" });
+  }
+
+  function cancelEdit() {
+    editingId = null;
+    $("reportForm").reset();
+    $("reportDate").value = localDate();
+    $("saveReportButton").textContent = "Save Report";
+    $("cancelEditButton").classList.add("hidden");
+    refreshExecutives();
+  }
+
+  async function deleteReport(id) {
+    if (!isAdmin()) return;
+    if (!confirm("Permanently delete this report?")) return;
+
+    try {
+      await unwrap(db.from("daily_reports").delete().eq("id", id));
+      message("appMessage", "Report deleted.");
+      await loadDashboard();
+    } catch (e) {
+      message("appMessage", e.message, true);
+    }
+  }
+
+  function clearFilters() {
+    $("filterFrom").value = "";
+    $("filterTo").value = "";
+    $("filterShowroom").value = "";
+    $("filterExecutive").value = "";
+    renderReports();
+  }
+
+  function exportExcel() {
+    if (!window.XLSX) {
+      return message("appMessage", "Excel library failed to load.", true);
+    }
+
+    const data = getFilteredReports().map(r => ({
+      Date: r.report_date,
+      Showroom: r.showrooms?.name || "",
+      Executive: r.executives?.name || "",
+      Visitors: r.visitors,
+      Orders: r.orders,
+      "Conversion Rate":
+        (r.visitors ? r.orders / r.visitors * 100 : 0).toFixed(2) + "%",
+      Notes: r.notes || ""
+    }));
+
+    const sheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Performance Reports");
+    XLSX.writeFile(workbook, "RAK_Showroom_Performance.xlsx");
+  }
+
+  $("loginForm").addEventListener("submit", login);
+  $("logoutButton").addEventListener("click", logout);
+  $("refreshButton").addEventListener("click", loadDashboard);
+  $("showroomForm").addEventListener("submit", addShowroom);
+  $("executiveForm").addEventListener("submit", addExecutive);
+  $("reportForm").addEventListener("submit", saveReport);
+  $("reportShowroom").addEventListener("change", refreshExecutives);
+  $("applyFiltersButton").addEventListener("click", renderReports);
+  $("clearFiltersButton").addEventListener("click", clearFilters);
+  $("cancelEditButton").addEventListener("click", cancelEdit);
+  $("exportButton").addEventListener("click", exportExcel);
+
+  if (
+    !SUPABASE_URL.startsWith("https://") ||
+    SUPABASE_URL.includes("YOUR_SUPABASE") ||
+    SUPABASE_PUBLISHABLE_KEY.includes("YOUR_SUPABASE")
+  ) {
+    message("loginMessage",
+      "Setup required: enter your Supabase URL and publishable key.", true);
+    return;
+  }
+
+  if (!window.supabase) {
+    message("loginMessage", "Supabase library failed to load.", true);
+    return;
+  }
+
+  db = window.supabase.createClient(
+    SUPABASE_URL,দ
+    SUPABASE_PUBLISHABLE_KEY
+  );
+
+  db.auth.onAuthStateChange(event => {
+    if (event === "SIGNED_OUT") showLoggedOut();
+  });
+
+  startApp();
+})();
+</script>
+</body>
+</html>
